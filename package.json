@@ -1,0 +1,27 @@
+{
+  "name": "joki-telegram-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for joki service",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js",
+    "dev": "nodemon src/bot.js"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "joki"
+  ],
+  "author": "Rizqi Nur Andi Putra",
+  "license": "ISC",
+  "dependencies": {
+    "cloudinary": "^2.5.1",
+    "dotenv": "^16.4.5",
+    "google-auth-library": "^9.14.2",
+    "google-spreadsheet": "^4.1.4",
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  }
+}
