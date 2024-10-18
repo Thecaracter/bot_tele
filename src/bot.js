@@ -216,7 +216,7 @@ async function handleMessage(msg) {
     case 'nama':
       userData[chatId].Nama = messageText;
       userStates[chatId] = 'pembuatan';
-      return sendKeyboardWithMainMenu(chatId, '2. Pembuatan (contoh: website/android/mobile/desktop)/bahasa pemrograman');
+      return sendKeyboardWithMainMenu(chatId, '2. Pembuatan (contoh: website/android/mobile/desktop)');
     case 'pembuatan':
       userData[chatId].Pembuatan = messageText;
       userStates[chatId] = 'keperluan';
