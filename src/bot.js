@@ -10,6 +10,8 @@ const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
 const bot = new TelegramBot(TOKEN);
 
+console.log('Initializing bot with token:', TOKEN);
+console.log('Setting webhook URL:', `${WEBHOOK_URL}/api/webhook`);
 
 bot.setWebHook(`${WEBHOOK_URL}/api/webhook`);
 
@@ -151,7 +153,6 @@ function sendKeyboardWithMainMenu(chatId, message, options = []) {
   bot.sendMessage(chatId, message, { reply_markup: replyMarkup });
 }
 
-
 async function sendInvoice(chatId, isDP = true) {
   const data = userData[chatId];
   let invoiceText = `Invoice Pemesanan\nID Pesanan: ${data.OrderId}\n\n`;
@@ -236,6 +237,7 @@ bot.onText(/\/start/, (msg) => {
 });
 
 bot.on('message', async (msg) => {
+  console.log('Received message:', JSON.stringify(msg));
   const chatId = msg.chat.id;
   const messageText = msg.text;
   const currentState = userStates[chatId] || 'main_menu';
@@ -345,16 +347,47 @@ bot.on('message', async (msg) => {
   }
 });
 
+async function verifyWebhook() {
+  try {
+    const response = await axios.get(`https://api.telegram.org/bot${TOKEN}/getWebhookInfo`);
+    console.log('Webhook info:', JSON.stringify(response.data));
+    return response.data;
+  } catch (error) {
+    console.error('Error verifying webhook:', error);
+    throw error;
+  }
+}
+
 module.exports = async (req, res) => {
+  console.log('Received request:', req.method, 'Body:', JSON.stringify(req.body));
+
   if (req.method === 'POST') {
     try {
       await bot.processUpdate(req.body);
+      console.log('Update processed successfully');
       res.status(200).send('OK');
     } catch (error) {
       console.error('Error processing update:', error);
       res.status(500).send('Error processing update');
     }
+  } else if (req.method === 'GET') {
+    if (req.query.verify === 'true') {
+      try {
+        const webhookInfo = await verifyWebhook();
+        res.status(200).json({
+          message: 'Webhook verification completed',
+          webhookInfo: webhookInfo
+        });
+      } catch (error) {
+        res.status(500).json({
+          message: 'Error verifying webhook',
+          error: error.message
+        });
+      }
+    } else {
+      res.status(200).send('Bot webhook is active. Use ?verify=true to check webhook status.');
+    }
   } else {
-    res.status(200).send('Bot webhook is active');
+    res.status(405).send('Method Not Allowed');
   }
 };
