@@ -4,15 +4,22 @@ const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
 const cloudinary = require('cloudinary').v2;
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
 const { sendAdminNotification } = require('./adminNotification');
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const bot = new TelegramBot(TOKEN, { polling: true });
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
-const CREDENTIALS = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', 'credentials.json')));
+
+let CREDENTIALS;
+if (process.env.GOOGLE_CREDENTIALS) {
+  CREDENTIALS = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+} else {
+  // Fallback untuk development lokal
+  const fs = require('fs');
+  const path = require('path');
+  CREDENTIALS = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', 'credentials.json')));
+}
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
