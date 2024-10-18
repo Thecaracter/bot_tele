@@ -9,6 +9,7 @@ const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBHOOK_URL = process.env.WEBHOOK_URL || 'https://bot-tele-ten-dun.vercel.app/api/webhook';
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const CREDENTIALS = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+const ADMIN_CHAT_ID = 1331471353; // ID chat admin
 
 // Konfigurasi Cloudinary
 cloudinary.config({
@@ -24,6 +25,16 @@ bot.setWebHook(WEBHOOK_URL);
 // State dan data pengguna
 const userStates = {};
 const userData = {};
+
+// Fungsi notifikasi admin
+async function sendAdminNotification(message) {
+  try {
+    await bot.sendMessage(ADMIN_CHAT_ID, message);
+    console.log(`Notifikasi berhasil dikirim ke admin (Chat ID: ${ADMIN_CHAT_ID})`);
+  } catch (error) {
+    console.error('Gagal mengirim notifikasi ke admin:', error);
+  }
+}
 
 // Fungsi-fungsi utilitas
 function getUserName(msg) {
@@ -59,6 +70,14 @@ async function updateSheet(orderId, updateValues) {
   } else {
     await sheet.addRow(updateValues);
   }
+
+  // Kirim notifikasi ke admin
+  const notificationMessage = `Pesanan baru atau diperbarui:
+Order ID: ${orderId}
+Nama: ${updateValues.Nama}
+Username: ${updateValues.Username}
+Status: ${updateValues.Status}`;
+  await sendAdminNotification(notificationMessage);
 }
 
 async function uploadToCloudinary(fileBuffer, fileName) {
@@ -148,6 +167,13 @@ async function handlePaymentProof(msg, isDP = true) {
 
     await updateSheet(orderId, updateData);
     await bot.sendMessage(chatId, `Bukti pembayaran berhasil diunggah dan status pesanan telah diperbarui.`);
+
+    const adminNotification = `Bukti pembayaran ${isDP ? 'DP' : 'pelunasan'} diterima:
+Order ID: ${orderId}
+Nama: ${updateData.Nama}
+Status: ${updateData.Status}`;
+    await sendAdminNotification(adminNotification);
+
     await bot.sendMessage(chatId, isDP
       ? "Terima kasih atas pembayaran DP. Tim kami akan segera memproses pesanan Anda."
       : "Terima kasih atas pelunasan. Pesanan Anda akan segera diselesaikan."
@@ -216,7 +242,7 @@ async function handleMessage(msg) {
     case 'nama':
       userData[chatId].Nama = messageText;
       userStates[chatId] = 'pembuatan';
-      return sendKeyboardWithMainMenu(chatId, '2. Pembuatan (contoh: website/android/mobile/desktop)');
+      return sendKeyboardWithMainMenu(chatId, '2. Pembuatan (contoh: website/android/mobile/desktop)/bahasa pemrograman');
     case 'pembuatan':
       userData[chatId].Pembuatan = messageText;
       userStates[chatId] = 'keperluan';
@@ -247,6 +273,13 @@ async function handleMessage(msg) {
       userData[chatId].TelegramID = msg.from.id;
       await updateSheet(userData[chatId].OrderId, userData[chatId]);
       await sendInvoice(chatId, true);
+
+      const newOrderNotification = `Pesanan baru diterima:
+Order ID: ${userData[chatId].OrderId}
+Nama: ${userData[chatId].Nama}
+Status: Menunggu DP`;
+      await sendAdminNotification(newOrderNotification);
+
       userStates[chatId] = 'waiting_dp';
       return sendKeyboardWithMainMenu(chatId, 'Pesanan Anda telah dicatat. Silakan lakukan pembayaran DP.');
     default:
