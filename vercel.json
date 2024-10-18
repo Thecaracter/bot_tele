@@ -3,15 +3,12 @@
     "builds": [
         {
             "src": "src/bot.js",
-            "use": "@vercel/node",
-            "config": {
-                "buildCommand": "npm install"
-            }
+            "use": "@vercel/node"
         }
     ],
     "routes": [
         {
-            "src": "/(.*)",
+            "src": "/api/webhook",
             "dest": "src/bot.js"
         }
     ]

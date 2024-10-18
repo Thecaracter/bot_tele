@@ -7,7 +7,11 @@ const axios = require('axios');
 const { sendAdminNotification } = require('./adminNotification');
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const bot = new TelegramBot(TOKEN, { polling: true });
+const WEBHOOK_URL = process.env.WEBHOOK_URL;
+const bot = new TelegramBot(TOKEN);
+
+
+bot.setWebHook(`${WEBHOOK_URL}/api/webhook`);
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
@@ -341,4 +345,16 @@ bot.on('message', async (msg) => {
   }
 });
 
-console.log('Bot sedang berjalan...');
+module.exports = async (req, res) => {
+  if (req.method === 'POST') {
+    try {
+      await bot.processUpdate(req.body);
+      res.status(200).send('OK');
+    } catch (error) {
+      console.error('Error processing update:', error);
+      res.status(500).send('Error processing update');
+    }
+  } else {
+    res.status(200).send('Bot webhook is active');
+  }
+};
