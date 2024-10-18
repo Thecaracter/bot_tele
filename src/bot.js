@@ -45,6 +45,7 @@ function getUserName(msg) {
 }
 
 async function uploadToCloudinary(fileBuffer, fileName) {
+  console.log('Uploading to Cloudinary:', fileName);
   return new Promise((resolve, reject) => {
     cloudinary.uploader.upload_stream(
       {
@@ -53,14 +54,20 @@ async function uploadToCloudinary(fileBuffer, fileName) {
         folder: "bukti_pembayaran"
       },
       (error, result) => {
-        if (error) reject(error);
-        else resolve(result);
+        if (error) {
+          console.error('Cloudinary upload error:', error);
+          reject(error);
+        } else {
+          console.log('Cloudinary upload success:', result.secure_url);
+          resolve(result);
+        }
       }
     ).end(fileBuffer);
   });
 }
 
 async function getSheet() {
+  console.log('Getting Google Sheet');
   const client = new JWT({
     email: CREDENTIALS.client_email,
     key: CREDENTIALS.private_key,
@@ -69,16 +76,21 @@ async function getSheet() {
 
   const doc = new GoogleSpreadsheet(SHEET_ID, client);
   await doc.loadInfo();
+  console.log('Google Sheet loaded successfully');
   return doc.sheetsByIndex[0];
 }
 
 async function ensureHeaderExists(sheet) {
+  console.log('Ensuring header exists in Google Sheet');
   try {
     await sheet.loadHeaderRow();
+    console.log('Header row loaded successfully');
   } catch (error) {
+    console.error('Error loading header row:', error);
     if (error.message.includes('No values in the header row')) {
       const headers = ['Nama', 'Username', 'Pembuatan', 'Keperluan', 'Teknologi', 'Fitur', 'Mockup', 'Deadline', 'AkunTiktok', 'OrderId', 'Status', 'BuktiDP', 'BuktiPelunasan', 'TelegramID'];
       await sheet.setHeaderRow(headers);
+      console.log('Header row set successfully');
     } else {
       throw error;
     }
@@ -86,50 +98,49 @@ async function ensureHeaderExists(sheet) {
 }
 
 async function updateSheet(orderId, updateValues) {
-  const sheet = await getSheet();
-  await ensureHeaderExists(sheet);
-  const rows = await sheet.getRows();
+  console.log(`Updating sheet for OrderId: ${orderId}`);
+  try {
+    const sheet = await getSheet();
+    await ensureHeaderExists(sheet);
+    const rows = await sheet.getRows();
 
-  console.log(`Mencari baris dengan OrderId: ${orderId}`);
+    console.log(`Searching for row with OrderId: ${orderId}`);
+    let rowToUpdate = rows.find(row => row.OrderId?.trim() === orderId?.trim());
 
-  let rowToUpdate = rows.find(row => row.OrderId?.trim() === orderId?.trim());
-
-  if (rowToUpdate) {
-    console.log(`Baris ditemukan untuk OrderId: ${orderId}, memperbarui nilai...`);
-    Object.keys(updateValues).forEach(key => {
-      if (updateValues[key] !== undefined) {
-        console.log(`Memperbarui ${key}: ${rowToUpdate[key]} -> ${updateValues[key]}`);
-        rowToUpdate[key] = updateValues[key];
-      }
-    });
-    try {
+    if (rowToUpdate) {
+      console.log(`Row found for OrderId: ${orderId}, updating values...`);
+      Object.keys(updateValues).forEach(key => {
+        if (updateValues[key] !== undefined) {
+          console.log(`Updating ${key}: ${rowToUpdate[key]} -> ${updateValues[key]}`);
+          rowToUpdate[key] = updateValues[key];
+        }
+      });
       await rowToUpdate.save();
-      console.log(`Baris berhasil diperbarui untuk OrderId: ${orderId}`);
-    } catch (error) {
-      console.error(`Gagal menyimpan pembaruan untuk OrderId: ${orderId}`, error);
-      throw error;
-    }
-  } else {
-    console.log(`Tidak ada baris yang ditemukan untuk OrderId: ${orderId}, menambahkan baris baru...`);
-    try {
+      console.log(`Row successfully updated for OrderId: ${orderId}`);
+    } else {
+      console.log(`No row found for OrderId: ${orderId}, adding new row...`);
       await sheet.addRow(updateValues);
-      console.log(`Baris baru berhasil ditambahkan untuk OrderId: ${orderId}`);
-    } catch (error) {
-      console.error(`Gagal menambahkan baris baru untuk OrderId: ${orderId}`, error);
-      throw error;
+      console.log(`New row successfully added for OrderId: ${orderId}`);
     }
-  }
 
-  // Kirim notifikasi ke admin
-  const newOrderMessage = `Pesanan baru atau diperbarui:\nOrder ID: ${orderId}\nNama: ${updateValues.Nama}\nUsername: ${updateValues.Username},\nStatus: ${updateValues.Status}`;
-  await sendAdminNotification(newOrderMessage);
+    // Kirim notifikasi ke admin
+    const newOrderMessage = `Pesanan baru atau diperbarui:\nOrder ID: ${orderId}\nNama: ${updateValues.Nama}\nUsername: ${updateValues.Username},\nStatus: ${updateValues.Status}`;
+    await sendAdminNotification(newOrderMessage);
+    console.log('Admin notification sent');
+  } catch (error) {
+    console.error(`Error updating sheet for OrderId: ${orderId}`, error);
+    throw error;
+  }
 }
 
 function generateOrderId() {
-  return 'ORDER' + Date.now().toString().slice(-6);
+  const orderId = 'ORDER' + Date.now().toString().slice(-6);
+  console.log('Generated OrderId:', orderId);
+  return orderId;
 }
 
 function sendMainMenu(chatId) {
+  console.log(`Sending main menu to chatId: ${chatId}`);
   const options = {
     reply_markup: {
       keyboard: [
@@ -145,6 +156,7 @@ function sendMainMenu(chatId) {
 }
 
 function sendKeyboardWithMainMenu(chatId, message, options = []) {
+  console.log(`Sending keyboard with main menu to chatId: ${chatId}`);
   const keyboard = [
     ...options.map(option => [option]),
     ['Kembali ke Menu Utama']
@@ -158,6 +170,7 @@ function sendKeyboardWithMainMenu(chatId, message, options = []) {
 }
 
 async function sendInvoice(chatId, isDP = true) {
+  console.log(`Sending invoice to chatId: ${chatId}, isDP: ${isDP}`);
   const data = userData[chatId];
   let invoiceText = `Invoice Pemesanan\nID Pesanan: ${data.OrderId}\n\n`;
   invoiceText += `Nama: ${data.Nama}\n`;
@@ -183,12 +196,14 @@ async function sendInvoice(chatId, isDP = true) {
 
 async function handlePaymentProof(msg, isDP = true) {
   const chatId = msg.chat.id;
+  console.log(`Handling payment proof for chatId: ${chatId}, isDP: ${isDP}`);
   const photo = msg.photo[msg.photo.length - 1];
   const fileId = photo.file_id;
   const telegramId = msg.from.id;
 
   try {
     const fileUrl = await bot.getFileLink(fileId);
+    console.log('File URL obtained:', fileUrl);
     const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
     const fileBuffer = Buffer.from(response.data, 'binary');
 
@@ -208,7 +223,7 @@ async function handlePaymentProof(msg, isDP = true) {
     };
 
     await updateSheet(orderId, updateData);
-    console.log(`Bukti pembayaran berhasil diunggah untuk OrderId: ${orderId}`);
+    console.log(`Payment proof uploaded successfully for OrderId: ${orderId}`);
 
     await bot.sendMessage(chatId, `Bukti pembayaran berhasil diunggah dan status pesanan telah diperbarui.`);
 
@@ -224,12 +239,13 @@ async function handlePaymentProof(msg, isDP = true) {
     sendMainMenu(chatId);
 
   } catch (error) {
-    console.error('Error saat memproses bukti pembayaran:', error);
+    console.error('Error processing payment proof:', error);
     await bot.sendMessage(chatId, 'Terjadi kesalahan saat mengunggah bukti pembayaran. Silakan coba lagi nanti.');
   }
 }
 
 function resetUserState(chatId) {
+  console.log(`Resetting user state for chatId: ${chatId}`);
   delete userStates[chatId];
   delete userData[chatId];
   sendMainMenu(chatId);
@@ -237,6 +253,7 @@ function resetUserState(chatId) {
 
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
+  console.log(`Received /start command from chatId: ${chatId}`);
   resetUserState(chatId);
 });
 
@@ -245,6 +262,8 @@ bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const messageText = msg.text;
   const currentState = userStates[chatId] || 'main_menu';
+
+  console.log(`Processing message for chatId: ${chatId}, currentState: ${currentState}`);
 
   if (messageText === 'Kembali ke Menu Utama') {
     resetUserState(chatId);
@@ -260,94 +279,101 @@ bot.on('message', async (msg) => {
     return;
   }
 
-  switch (currentState) {
-    case 'main_menu':
-      switch (messageText) {
-        case 'Pesan Joki':
-          sendKeyboardWithMainMenu(chatId, 'Apakah Anda belum joki atau sudah joki?', ['Belum Joki', 'Sudah Joki']);
-          userStates[chatId] = 'ask_joki';
-          break;
-        case 'Info Layanan':
-          await bot.sendMessage(chatId, 'Kami menyediakan layanan joki untuk berbagai kebutuhan. Silakan hubungi admin untuk informasi lebih lanjut.');
-          sendMainMenu(chatId);
-          break;
-        case 'Hubungi Admin':
-          await bot.sendMessage(chatId, 'Silakan hubungi admin kami di @namaadmin');
-          sendMainMenu(chatId);
-          break;
-        default:
-          sendMainMenu(chatId);
-          break;
-      }
-      break;
-    case 'ask_joki':
-      if (messageText === 'Belum Joki') {
-        userStates[chatId] = 'nama';
+  try {
+    switch (currentState) {
+      case 'main_menu':
+        switch (messageText) {
+          case 'Pesan Joki':
+            sendKeyboardWithMainMenu(chatId, 'Apakah Anda belum joki atau sudah joki?', ['Belum Joki', 'Sudah Joki']);
+            userStates[chatId] = 'ask_joki';
+            break;
+          case 'Info Layanan':
+            await bot.sendMessage(chatId, 'Kami menyediakan layanan joki untuk berbagai kebutuhan. Silakan hubungi admin untuk informasi lebih lanjut.');
+            sendMainMenu(chatId);
+            break;
+          case 'Hubungi Admin':
+            await bot.sendMessage(chatId, 'Silakan hubungi admin kami di @namaadmin');
+            sendMainMenu(chatId);
+            break;
+          default:
+            sendMainMenu(chatId);
+            break;
+        }
+        break;
+      case 'ask_joki':
+        if (messageText === 'Belum Joki') {
+          userStates[chatId] = 'nama';
+          userData[chatId] = {
+            ...userData[chatId],
+            OrderId: generateOrderId()
+          };
+          sendKeyboardWithMainMenu(chatId, 'Silakan isi form berikut:\n1. Nama');
+        } else if (messageText === 'Sudah Joki') {
+          userStates[chatId] = 'check_order_id';
+          sendKeyboardWithMainMenu(chatId, 'Silakan masukkan ID Pemesanan Anda:');
+        }
+        break;
+      case 'check_order_id':
         userData[chatId] = {
           ...userData[chatId],
-          OrderId: generateOrderId()
+          OrderId: messageText
         };
-        sendKeyboardWithMainMenu(chatId, 'Silakan isi form berikut:\n1. Nama');
-      } else if (messageText === 'Sudah Joki') {
-        userStates[chatId] = 'check_order_id';
-        sendKeyboardWithMainMenu(chatId, 'Silakan masukkan ID Pemesanan Anda:');
-      }
-      break;
-    case 'check_order_id':
-      userData[chatId] = {
-        ...userData[chatId],
-        OrderId: messageText
-      };
-      sendKeyboardWithMainMenu(chatId, 'Silakan kirimkan bukti pembayaran pelunasan dalam bentuk foto.');
-      userStates[chatId] = 'pelunasan';
-      break;
-    case 'nama':
-      userData[chatId].Nama = messageText;
-      sendKeyboardWithMainMenu(chatId, '2. Pembuatan (contoh: website/android/mobile/desktop)/bahasa pemrograman');
-      userStates[chatId] = 'pembuatan';
-      break;
-    case 'pembuatan':
-      userData[chatId].Pembuatan = messageText;
-      sendKeyboardWithMainMenu(chatId, '3. Keperluan (contoh: tugas kuliah/ skripsi/ UMKM)');
-      userStates[chatId] = 'keperluan';
-      break;
-    case 'keperluan':
-      userData[chatId].Keperluan = messageText;
-      sendKeyboardWithMainMenu(chatId, '4. Teknologi/ Bahasa Pemrograman (isi bebas jika tidak ada bahasa yang diperlukan)');
-      userStates[chatId] = 'teknologi';
-      break;
-    case 'teknologi':
-      userData[chatId].Teknologi = messageText;
-      sendKeyboardWithMainMenu(chatId, '5. Fitur');
-      userStates[chatId] = 'fitur';
-      break;
-    case 'fitur':
-      userData[chatId].Fitur = messageText;
-      sendKeyboardWithMainMenu(chatId, '6. Ada mock up/ prototype?', ['Ya', 'Tidak']);
-      userStates[chatId] = 'mockup';
-      break;
-    case 'mockup':
-      userData[chatId].Mockup = messageText;
-      sendKeyboardWithMainMenu(chatId, '7. Deadline (format: dd/mm/yyyy)');
-      userStates[chatId] = 'deadline';
-      break;
-    case 'deadline':
-      userData[chatId].Deadline = messageText;
-      sendKeyboardWithMainMenu(chatId, '8. Akun TikTok (jika chat di TikTok)');
-      userStates[chatId] = 'tiktok';
-      break;
-    case 'tiktok':
-      userData[chatId].AkunTiktok = messageuserData[chatId].AkunTiktok = messageText;
-      userData[chatId].Status = 'Menunggu DP';
-      userData[chatId].TelegramID = msg.from.id;
-      await updateSheet(userData[chatId].OrderId, userData[chatId]);
-      await sendInvoice(chatId, true);
-      userStates[chatId] = 'waiting_dp';
-      sendKeyboardWithMainMenu(chatId, 'Pesanan Anda telah dicatat. Silakan lakukan pembayaran DP.');
-      break;
-    default:
-      sendKeyboardWithMainMenu(chatId, 'Maaf, saya tidak mengerti. Silakan gunakan menu yang tersedia.');
-      break;
+        sendKeyboardWithMainMenu(chatId, 'Silakan kirimkan bukti pembayaran pelunasan dalam bentuk foto.');
+        userStates[chatId] = 'pelunasan';
+        break;
+      case 'nama':
+        userData[chatId].Nama = messageText;
+        sendKeyboardWithMainMenu(chatId, '2. Pembuatan (contoh: website/android/mobile/desktop)/bahasa pemrograman');
+        userStates[chatId] = 'pembuatan';
+        break;
+      case 'pembuatan':
+        userData[chatId].Pembuatan = messageText;
+        sendKeyboardWithMainMenu(chatId, '3. Keperluan (contoh: tugas kuliah/ skripsi/ UMKM)');
+        userStates[chatId] = 'keperluan';
+        break;
+      case 'keperluan':
+        userData[chatId].Keperluan = messageText;
+        sendKeyboardWithMainMenu(chatId, '4. Teknologi/ Bahasa Pemrograman (isi bebas jika tidak ada bahasa yang diperlukan)');
+        userStates[chatId] = 'teknologi';
+        break;
+      case 'teknologi':
+        userData[chatId].Teknologi = messageText;
+        sendKeyboardWithMainMenu(chatId, '5. Fitur');
+        userStates[chatId] = 'fitur';
+        break;
+      case 'fitur':
+        userData[chatId].Fitur = messageText;
+        sendKeyboardWithMainMenu(chatId, '6. Ada mock up/ prototype?', ['Ya', 'Tidak']);
+        userStates[chatId] = 'mockup';
+        break;
+      case 'mockup':
+        userData[chatId].Mockup = messageText;
+        sendKeyboardWithMainMenu(chatId, '7. Deadline (format: dd/mm/yyyy)');
+        userStates[chatId] = 'deadline';
+        break;
+      case 'deadline':
+        userData[chatId].Deadline = messageText;
+        sendKeyboardWithMainMenu(chatId, '8. Akun TikTok (jika chat di TikTok)');
+        userStates[chatId] = 'tiktok';
+        break;
+      case 'tiktok':
+        userData[chatId].AkunTiktok = messageText;
+        userData[chatId].Status = 'Menunggu DP';
+        userData[chatId].TelegramID = msg.from.id;
+        await updateSheet(userData[chatId].OrderId, userData[chatId]);
+        await sendInvoice(chatId, true);
+        userStates[chatId] = 'waiting_dp';
+        sendKeyboardWithMainMenu(chatId, 'Pesanan Anda telah dicatat. Silakan lakukan pembayaran DP.');
+        break;
+      default:
+        console.log(`Unhandled state: ${currentState}`);
+        sendKeyboardWithMainMenu(chatId, 'Maaf, saya tidak mengerti. Silakan gunakan menu yang tersedia.');
+        break;
+    }
+  } catch (error) {
+    console.error('Error processing message:', error);
+    await bot.sendMessage(chatId, 'Terjadi kesalahan saat memproses pesan Anda. Silakan coba lagi nanti.');
+    resetUserState(chatId);
   }
 });
 
@@ -411,3 +437,34 @@ if (process.env.NODE_ENV !== 'production') {
     bot.startPolling();
   });
 }
+
+// Fungsi untuk memeriksa dan membersihkan state yang tidak aktif
+function cleanupInactiveStates() {
+  const currentTime = Date.now();
+  const inactivityThreshold = 30 * 60 * 1000; // 30 menit
+
+  Object.keys(userStates).forEach(chatId => {
+    if (currentTime - userStates[chatId].lastActivity > inactivityThreshold) {
+      console.log(`Cleaning up inactive state for chatId: ${chatId}`);
+      delete userStates[chatId];
+      delete userData[chatId];
+    }
+  });
+}
+
+// Jalankan fungsi pembersihan setiap 15 menit
+setInterval(cleanupInactiveStates, 15 * 60 * 1000);
+
+// Fungsi untuk menyimpan aktivitas terakhir pengguna
+function updateLastActivity(chatId) {
+  if (userStates[chatId]) {
+    userStates[chatId].lastActivity = Date.now();
+  } else {
+    userStates[chatId] = { lastActivity: Date.now() };
+  }
+}
+
+// Panggil fungsi ini setiap kali ada interaksi dengan pengguna
+bot.on('message', (msg) => {
+  updateLastActivity(msg.chat.id);
+});
