@@ -7,13 +7,17 @@ const axios = require('axios');
 const { sendAdminNotification } = require('./adminNotification');
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const WEBHOOK_URL = process.env.WEBHOOK_URL;
+const WEBHOOK_URL = process.env.WEBHOOK_URL || 'https://bot-tele-ten-dun.vercel.app';
 const bot = new TelegramBot(TOKEN);
 
 console.log('Initializing bot with token:', TOKEN);
 console.log('Setting webhook URL:', `${WEBHOOK_URL}/api/webhook`);
 
-bot.setWebHook(`${WEBHOOK_URL}/api/webhook`);
+bot.setWebHook(`${WEBHOOK_URL}/api/webhook`).then(() => {
+  console.log('Webhook set successfully');
+}).catch((error) => {
+  console.error('Failed to set webhook:', error);
+});
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
@@ -333,7 +337,7 @@ bot.on('message', async (msg) => {
       userStates[chatId] = 'tiktok';
       break;
     case 'tiktok':
-      userData[chatId].AkunTiktok = messageText;
+      userData[chatId].AkunTiktok = messageuserData[chatId].AkunTiktok = messageText;
       userData[chatId].Status = 'Menunggu DP';
       userData[chatId].TelegramID = msg.from.id;
       await updateSheet(userData[chatId].OrderId, userData[chatId]);
@@ -345,6 +349,14 @@ bot.on('message', async (msg) => {
       sendKeyboardWithMainMenu(chatId, 'Maaf, saya tidak mengerti. Silakan gunakan menu yang tersedia.');
       break;
   }
+});
+
+bot.on('polling_error', (error) => {
+  console.error('Polling error:', error);
+});
+
+bot.on('webhook_error', (error) => {
+  console.error('Webhook error:', error);
 });
 
 async function verifyWebhook() {
@@ -391,3 +403,11 @@ module.exports = async (req, res) => {
     res.status(405).send('Method Not Allowed');
   }
 };
+
+// Tambahkan ini di akhir file, hanya untuk pengujian
+if (process.env.NODE_ENV !== 'production') {
+  bot.deleteWebHook().then(() => {
+    console.log('Webhook deleted, starting polling');
+    bot.startPolling();
+  });
+}
