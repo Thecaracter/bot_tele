@@ -1,6 +1,6 @@
 const TelegramBot = require('node-telegram-bot-api');
 
-// Pastikan untuk menggunakan token yang sama dengan bot utama ok
+// Pastikan untuk menggunakan token yang sama dengan bot utama 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const bot = new TelegramBot(TOKEN);
 
